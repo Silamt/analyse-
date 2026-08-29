@@ -67,6 +67,8 @@ table{width:100%;border-collapse:collapse;font-size:14px}
 th,td{text-align:left;padding:9px 16px;border-bottom:1px solid var(--border)}
 th{font-family:"Barlow Semi Condensed",sans-serif;text-transform:uppercase;font-size:11px;
   letter-spacing:.05em;color:var(--muted);font-weight:600}
+th.sortable{cursor:pointer;user-select:none;white-space:nowrap}
+th.sortable:hover{color:var(--ink)}
 td.num,th.num{text-align:right;font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
 tbody tr:last-child td{border-bottom:none}
 .arch{font-weight:600}
@@ -96,6 +98,13 @@ details.arch-item>summary .meta{color:var(--muted);font-weight:500;font-size:12.
 .arch-item .compo .cnt{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;
   color:var(--ink);font-weight:600;flex:none}
 .arch-item[open]>summary{background:var(--surface2)}
+.dblock{border-bottom:1px solid var(--border)}
+.dblock:last-child{border-bottom:none}
+.dhead{padding:11px 16px 5px;font-weight:600;display:flex;justify-content:space-between;
+  gap:10px;flex-wrap:wrap;align-items:baseline}
+.dhead .meta{color:var(--muted);font-weight:500;font-size:12.5px;
+  font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
+.dblock .compo{padding-left:28px}
 footer{margin-top:30px;color:var(--muted);font-size:12px;text-align:center}
 </style>
 
@@ -112,18 +121,22 @@ footer{margin-top:30px;color:var(--muted);font-size:12px;text-align:center}
 
 <div class="kpis" id="kpis"></div>
 
-<div class="grid">
-  <div class="panel">
-    <h2>Défenses par archétype <small>— % d'attaques stoppées</small></h2>
-    <div id="defTable"></div>
-  </div>
-  <div class="panel">
-    <h2>Attaques par archétype <small>— % de réussite / survie</small></h2>
-    <div id="atkTable"></div>
-  </div>
+<div class="panel" style="margin-top:22px">
+  <h2>Défenses par archétype <small>— % d'attaques stoppées (toutes cartes)</small></h2>
+  <div id="defTable"></div>
 </div>
 
-<div class="panel" style="margin-top:22px">
+<div class="panel" style="margin-top:18px">
+  <h2>Meilleures attaques par type de défense <small>— pour chaque défense, les contres qui percent</small></h2>
+  <div id="atkByDef"></div>
+</div>
+
+<div class="panel" style="margin-top:18px">
+  <h2>Défenses par carte <small>— clique pour déplier</small></h2>
+  <div id="defByMap"></div>
+</div>
+
+<div class="panel" style="margin-top:18px">
   <h2>Compositions par archétype <small>— défenses observées, clique pour déplier</small></h2>
   <div id="archList"></div>
 </div>
@@ -189,56 +202,75 @@ function filtered(){
 
 function pctClass(p){return p>=50?"good":p<=25?"bad":"";}
 
+const SORT={def:{col:"rate",dir:-1},atk:{col:"rate",dir:-1},raw:{col:null,dir:-1}};
+function makeTable(elId,cols,rows,skey){
+  const st=SORT[skey], el=document.getElementById(elId);
+  let rs=rows.slice();
+  if(st.col!=null){rs.sort((a,b)=>{let x=a[st.col],y=b[st.col];
+    if(typeof x==="string")return x.localeCompare(y,"fr")*st.dir; return (x-y)*st.dir;});}
+  const head=cols.map(c=>{const on=st.col===c.key;const ar=on?(st.dir<0?" ▼":" ▲"):"";
+    return `<th class="${c.num?"num ":""}sortable" data-k="${c.key}">${c.label}${ar}</th>`;}).join("");
+  const body=rs.length?rs.map(r=>"<tr>"+cols.map(c=>`<td class="${c.num?"num":""}">${c.fmt(r)}</td>`).join("")+"</tr>").join("")
+    :`<tr><td colspan="${cols.length}"><div class="empty">Aucune donnée avec ces filtres.</div></td></tr>`;
+  el.innerHTML=`<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+  el.querySelectorAll("th.sortable").forEach(th=>th.addEventListener("click",()=>{
+    const k=th.dataset.k; if(st.col===k)st.dir*=-1; else{st.col=k;st.dir=-1;} render();}));
+}
+
 function render(){
   const rows=filtered();
-  // KPIs
-  const total=rows.length;
-  const fails=rows.filter(r=>!r.cleared).length;
+  const total=rows.length, fails=rows.filter(r=>!r.cleared).length;
   const failRate=total?Math.round(fails/total*100):0;
   document.getElementById("kpis").innerHTML=`
     <div class="kpi"><div class="n">${total}</div><div class="l">Affrontements</div></div>
     <div class="kpi"><div class="n">${fails}</div><div class="l">Défenses ayant tenu</div></div>
     <div class="kpi"><div class="n">${failRate}%</div><div class="l">Taux d'échec attaquant</div></div>`;
 
-  // Defenses by archetype
+  // 1) Défenses par archétype
   const dm={};
-  for(const r of rows){const a=r.defArch;(dm[a]??=(dm[a]={faced:0,held:0})); dm[a].faced++; if(!r.cleared)dm[a].held++;}
-  const dRows=Object.entries(dm).map(([a,v])=>({a,faced:v.faced,held:v.held,rate:v.held/v.faced*100}))
-    .filter(x=>x.faced>=3).sort((x,y)=>y.rate-x.rate);
-  document.getElementById("defTable").innerHTML = dRows.length? `<table>
-    <thead><tr><th>Archétype</th><th class="num">Tenu</th><th class="num">Subi</th><th class="num">%</th></tr></thead>
-    <tbody>${dRows.map(r=>`<tr><td class="arch">${r.a}</td>
-      <td class="num">${r.held}</td><td class="num n-small">${r.faced}</td>
-      <td class="num"><span class="pct ${pctClass(r.rate)}">${Math.round(r.rate)}%</span></td></tr>`).join("")}
-    </tbody></table>` : `<div class="empty">Aucune défense (≥3 attaques) avec ces filtres.</div>`;
+  for(const r of rows){(dm[r.defArch]??=(dm[r.defArch]={faced:0,held:0}));dm[r.defArch].faced++;if(!r.cleared)dm[r.defArch].held++;}
+  const dRows=Object.entries(dm).map(([a,v])=>({a,faced:v.faced,held:v.held,rate:v.held/v.faced*100})).filter(x=>x.faced>=3);
+  makeTable("defTable",[
+    {key:"a",label:"Archétype",fmt:r=>`<span class="arch">${r.a}</span>`},
+    {key:"faced",label:"Attaques subies",num:true,fmt:r=>`<span class="n-small">${r.faced}</span>`},
+    {key:"held",label:"Attaques stoppées",num:true,fmt:r=>r.held},
+    {key:"rate",label:"% stoppées",num:true,fmt:r=>`<span class="pct ${pctClass(r.rate)}">${Math.round(r.rate)}%</span>`},
+  ],dRows,"def");
 
-  // Attacks by archetype
-  const am={};
-  for(const r of rows){const a=r.atkArch;(am[a]??=(am[a]={n:0,cl:0,surv:0})); am[a].n++; if(r.cleared){am[a].cl++;} am[a].surv+=r.surv;}
-  const aRows=Object.entries(am).map(([a,v])=>({a,n:v.n,cl:v.cl,rate:v.cl/v.n*100,surv:v.surv/v.n}))
-    .filter(x=>x.n>=3).sort((x,y)=>y.rate-x.rate||y.surv-x.surv);
-  document.getElementById("atkTable").innerHTML = aRows.length? `<table>
-    <thead><tr><th>Archétype</th><th class="num">Perce</th><th class="num">%</th><th class="num">Survie</th></tr></thead>
-    <tbody>${aRows.map(r=>`<tr><td class="arch">${r.a}</td>
-      <td class="num n-small">${r.cl}/${r.n}</td>
-      <td class="num"><span class="pct ${pctClass(r.rate)}">${Math.round(r.rate)}%</span></td>
-      <td class="num">${r.surv.toFixed(1)}</td></tr>`).join("")}
-    </tbody></table>` : `<div class="empty">Aucune attaque (≥3) avec ces filtres.</div>`;
+  // 2) Meilleures attaques par type de défense (tout affiché)
+  const byDef={};
+  for(const r of rows){const d=r.defArch;(byDef[d]??=(byDef[d]={faced:0,held:0,atk:{}}));
+    byDef[d].faced++; if(!r.cleared)byDef[d].held++;
+    const a=r.atkArch;(byDef[d].atk[a]??=(byDef[d].atk[a]={n:0,cl:0,surv:0}));
+    byDef[d].atk[a].n++; if(r.cleared)byDef[d].atk[a].cl++; byDef[d].atk[a].surv+=r.surv;}
+  const defList=Object.entries(byDef).filter(([,v])=>v.faced>=3).sort((x,y)=>y[1].faced-x[1].faced);
+  document.getElementById("atkByDef").innerHTML = defList.length? defList.map(([d,v])=>{
+    const hr=Math.round(v.held/v.faced*100);
+    const atks=Object.entries(v.atk).map(([a,z])=>({a,n:z.n,cl:z.cl,rate:z.cl/z.n*100,surv:z.surv/z.n}))
+      .filter(z=>z.n>=3).sort((x,y)=>y.rate-x.rate||y.surv-x.surv).slice(0,5);
+    const li=atks.length?atks.map(z=>`<div class="compo"><span><span class="arch">${z.a}</span></span>`+
+      `<span class="cnt">réussite <span class="pct ${pctClass(z.rate)}">${Math.round(z.rate)}%</span> · survie ${z.surv.toFixed(1)}/5 <span class="n-small">(${z.cl}/${z.n})</span></span></div>`).join("")
+      :`<div class="compo"><span class="n-small">pas assez d'attaques (≥3) avec ces filtres</span><span></span></div>`;
+    return `<div class="dblock"><div class="dhead"><span>▣ <span class="arch">${d}</span></span>`+
+      `<span class="meta">subie ${v.faced}× · a tenu ${v.held}× (${hr}%)</span></div>${li}</div>`;
+  }).join("") : `<div class="empty">Aucune donnée avec ces filtres.</div>`;
 
-  // Raw
-  document.getElementById("rawcount").textContent = `— ${total} lignes`+(total>300?" (300 affichées)":"");
-  const show=rows.slice(0,300);
-  document.getElementById("rawTable").innerHTML = show.length? `<table>
-    <thead><tr><th>Bat.</th><th>Carte</th><th>Défense</th><th>Attaque</th><th>Rés.</th></tr></thead>
-    <tbody>${show.map(r=>`<tr>
-      <td class="tag">${r.battle||"?"}</td>
-      <td>${r.map}</td>
-      <td>${r.def.join(", ")} <span class="tag">${r.defArch}</span></td>
-      <td>${r.atk.join(", ")} <span class="tag">${r.atkArch}</span></td>
-      <td class="${r.cleared?"res-ok":"res-fail"}">${r.cleared?"percée "+r.surv+"/5":"tenue"}</td>
-    </tr>`).join("")}</tbody></table>` : `<div class="empty">Rien à afficher.</div>`;
+  // 3) Défenses par carte (compos individuelles, déroulant)
+  const mm={};
+  for(const r of rows){const m=r.map;(mm[m]??=(mm[m]={}));const k=r.def.slice().sort().join(", ");
+    (mm[m][k]??=(mm[m][k]={faced:0,held:0,arch:r.defArch}));mm[m][k].faced++;if(!r.cleared)mm[m][k].held++;}
+  const maps=Object.entries(mm).sort((x,y)=>x[0].localeCompare(y[0],"fr"));
+  document.getElementById("defByMap").innerHTML = maps.map(([m,compos])=>{
+    const list=Object.entries(compos).map(([k,v])=>({k,faced:v.faced,held:v.held,rate:v.held/v.faced*100,arch:v.arch}))
+      .filter(z=>z.faced>=2).sort((x,y)=>y.rate-x.rate||y.faced-x.faced).slice(0,5);
+    if(!list.length)return "";
+    const items=list.map(z=>`<div class="compo"><span>${z.k} <span class="tag">${z.arch}</span></span>`+
+      `<span class="cnt"><span class="pct ${pctClass(z.rate)}">${Math.round(z.rate)}%</span> stoppées <span class="n-small">(${z.held}/${z.faced})</span></span></div>`).join("");
+    return `<details class="arch-item"><summary><span class="arch">${m}</span>`+
+      `<span class="meta">${list.length} défenses</span></summary>${items}</details>`;
+  }).join("") || `<div class="empty">Aucune donnée avec ces filtres.</div>`;
 
-  // Compositions par archétype (défenses)
+  // 4) Compositions par archétype
   const cm={};
   for(const r of rows){const a=r.defArch;const key=r.def.slice().sort().join(", ");
     (cm[a]??=(cm[a]={tot:0,compos:{}}));cm[a].tot++;cm[a].compos[key]=(cm[a].compos[key]||0)+1;}
@@ -249,6 +281,19 @@ function render(){
     return `<details class="arch-item"><summary><span class="arch">${a}</span>`+
       `<span class="meta">${v.tot} défenses · ${compos.length} compos</span></summary>${items}</details>`;
   }).join("") : `<div class="empty">Aucune donnée avec ces filtres.</div>`;
+
+  // 5) Détail
+  const rawRows=rows.slice(0,300).map(r=>({battle:r.battle||"?",map:r.map,
+    defKey:r.def.join(", "),defArch:r.defArch,atkKey:r.atk.join(", "),atkArch:r.atkArch,
+    resVal:r.cleared?r.surv:-1,cleared:r.cleared,surv:r.surv}));
+  document.getElementById("rawcount").textContent=`— ${total} lignes`+(total>300?" (300 affichées)":"");
+  makeTable("rawTable",[
+    {key:"battle",label:"Bat.",fmt:r=>`<span class="tag">${r.battle}</span>`},
+    {key:"map",label:"Carte",fmt:r=>r.map},
+    {key:"defArch",label:"Défense",fmt:r=>`${r.defKey} <span class="tag">${r.defArch}</span>`},
+    {key:"atkArch",label:"Attaque",fmt:r=>`${r.atkKey} <span class="tag">${r.atkArch}</span>`},
+    {key:"resVal",label:"Rés.",fmt:r=>`<span class="${r.cleared?"res-ok":"res-fail"}">${r.cleared?"percée "+r.surv+"/5":"tenue"}</span>`},
+  ],rawRows,"raw");
 
   document.getElementById("foot").textContent =
     `${DATA.length} affrontements au total · saison 26 · Les Joyeux Psychopathes`;
