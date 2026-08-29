@@ -229,7 +229,7 @@ function render(){
   // 1) Défenses par archétype
   const dm={};
   for(const r of rows){(dm[r.defArch]??=(dm[r.defArch]={faced:0,held:0}));dm[r.defArch].faced++;if(!r.cleared)dm[r.defArch].held++;}
-  const dRows=Object.entries(dm).map(([a,v])=>({a,faced:v.faced,held:v.held,rate:v.held/v.faced*100})).filter(x=>x.faced>=3);
+  const dRows=Object.entries(dm).map(([a,v])=>({a,faced:v.faced,held:v.held,rate:v.held/v.faced*100})).filter(x=>x.faced>=10);
   makeTable("defTable",[
     {key:"a",label:"Archétype",fmt:r=>`<span class="arch">${r.a}</span>`},
     {key:"faced",label:"Attaques subies",num:true,fmt:r=>`<span class="n-small">${r.faced}</span>`},
@@ -243,7 +243,7 @@ function render(){
     byDef[d].faced++; if(!r.cleared)byDef[d].held++;
     const a=r.atkArch;(byDef[d].atk[a]??=(byDef[d].atk[a]={n:0,cl:0,surv:0}));
     byDef[d].atk[a].n++; if(r.cleared)byDef[d].atk[a].cl++; byDef[d].atk[a].surv+=r.surv;}
-  const defList=Object.entries(byDef).filter(([,v])=>v.faced>=3).sort((x,y)=>y[1].faced-x[1].faced);
+  const defList=Object.entries(byDef).filter(([,v])=>v.faced>=10).sort((x,y)=>y[1].faced-x[1].faced);
   document.getElementById("atkByDef").innerHTML = defList.length? defList.map(([d,v])=>{
     const hr=Math.round(v.held/v.faced*100);
     const atks=Object.entries(v.atk).map(([a,z])=>({a,n:z.n,cl:z.cl,rate:z.cl/z.n*100,surv:z.surv/z.n}))
