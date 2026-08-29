@@ -93,9 +93,9 @@ details.arch-item>summary::-webkit-details-marker{display:none}
 details.arch-item>summary:hover{background:var(--surface2)}
 details.arch-item>summary .meta{color:var(--muted);font-weight:500;font-size:12.5px;
   font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
-.arch-item .compo{display:flex;justify-content:space-between;gap:12px;padding:6px 16px 6px 28px;
+div.compo{display:flex;justify-content:space-between;gap:12px;padding:6px 16px 6px 28px;
   font-size:13px;border-top:1px solid var(--border);color:var(--muted)}
-.arch-item .compo .cnt{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;
+.compo .cnt{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;
   color:var(--ink);font-weight:600;flex:none}
 .arch-item[open]>summary{background:var(--surface2)}
 .dblock{border-bottom:1px solid var(--border)}
@@ -104,7 +104,7 @@ details.arch-item>summary .meta{color:var(--muted);font-weight:500;font-size:12.
   gap:10px;flex-wrap:wrap;align-items:baseline}
 .dhead .meta{color:var(--muted);font-weight:500;font-size:12.5px;
   font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
-.dblock .compo{padding-left:28px}
+
 footer{margin-top:30px;color:var(--muted);font-size:12px;text-align:center}
 </style>
 
@@ -248,11 +248,16 @@ function render(){
     const hr=Math.round(v.held/v.faced*100);
     const atks=Object.entries(v.atk).map(([a,z])=>({a,n:z.n,cl:z.cl,rate:z.cl/z.n*100,surv:z.surv/z.n}))
       .filter(z=>z.n>=3).sort((x,y)=>y.rate-x.rate||y.surv-x.surv).slice(0,5);
-    const li=atks.length?atks.map(z=>`<div class="compo"><span><span class="arch">${z.a}</span></span>`+
-      `<span class="cnt">réussite <span class="pct ${pctClass(z.rate)}">${Math.round(z.rate)}%</span> · survie ${z.surv.toFixed(1)}/5 <span class="n-small">(${z.cl}/${z.n})</span></span></div>`).join("")
-      :`<div class="compo"><span class="n-small">pas assez d'attaques (≥3) avec ces filtres</span><span></span></div>`;
+    const body=atks.length?atks.map(z=>`<tr>`+
+      `<td class="arch">${z.a}</td>`+
+      `<td class="num"><span class="pct ${pctClass(z.rate)}">${Math.round(z.rate)}%</span></td>`+
+      `<td class="num">${z.surv.toFixed(1)}</td>`+
+      `<td class="num n-small">${z.cl}/${z.n}</td></tr>`).join("")
+      :`<tr><td colspan="4" class="n-small" style="padding:8px 16px">pas assez d'attaques (≥3) avec ces filtres</td></tr>`;
     return `<div class="dblock"><div class="dhead"><span>▣ <span class="arch">${d}</span></span>`+
-      `<span class="meta">subie ${v.faced}× · a tenu ${v.held}× (${hr}%)</span></div>${li}</div>`;
+      `<span class="meta">${v.faced} attaques subies · ${v.held} stoppées (${hr}% défense)</span></div>`+
+      `<table><thead><tr><th>Archétype d’attaque</th><th class="num">Réussite</th>`+
+      `<th class="num">Survie /5</th><th class="num">Détail</th></tr></thead><tbody>${body}</tbody></table></div>`;
   }).join("") : `<div class="empty">Aucune donnée avec ces filtres.</div>`;
 
   // 3) Défenses par carte (compos individuelles, déroulant)
