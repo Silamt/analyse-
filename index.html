@@ -83,6 +83,19 @@ tbody tr:last-child td{border-bottom:none}
   background:var(--surface2);border:1px solid var(--border);color:var(--muted)}
 .res-ok{color:var(--good);font-weight:600} .res-fail{color:var(--bad);font-weight:600}
 .empty{padding:26px 16px;color:var(--muted);text-align:center}
+details.arch-item{border-bottom:1px solid var(--border)}
+details.arch-item:last-child{border-bottom:none}
+details.arch-item>summary{list-style:none;cursor:pointer;padding:11px 16px;display:flex;
+  align-items:center;justify-content:space-between;gap:10px;font-weight:600}
+details.arch-item>summary::-webkit-details-marker{display:none}
+details.arch-item>summary:hover{background:var(--surface2)}
+details.arch-item>summary .meta{color:var(--muted);font-weight:500;font-size:12.5px;
+  font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
+.arch-item .compo{display:flex;justify-content:space-between;gap:12px;padding:6px 16px 6px 28px;
+  font-size:13px;border-top:1px solid var(--border);color:var(--muted)}
+.arch-item .compo .cnt{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;
+  color:var(--ink);font-weight:600;flex:none}
+.arch-item[open]>summary{background:var(--surface2)}
 footer{margin-top:30px;color:var(--muted);font-size:12px;text-align:center}
 </style>
 
@@ -108,6 +121,11 @@ footer{margin-top:30px;color:var(--muted);font-size:12px;text-align:center}
     <h2>Attaques par archétype <small>— % de réussite / survie</small></h2>
     <div id="atkTable"></div>
   </div>
+</div>
+
+<div class="panel" style="margin-top:22px">
+  <h2>Compositions par archétype <small>— défenses observées, clique pour déplier</small></h2>
+  <div id="archList"></div>
 </div>
 
 <div class="rawwrap">
@@ -219,6 +237,18 @@ function render(){
       <td>${r.atk.join(", ")} <span class="tag">${r.atkArch}</span></td>
       <td class="${r.cleared?"res-ok":"res-fail"}">${r.cleared?"percée "+r.surv+"/5":"tenue"}</td>
     </tr>`).join("")}</tbody></table>` : `<div class="empty">Rien à afficher.</div>`;
+
+  // Compositions par archétype (défenses)
+  const cm={};
+  for(const r of rows){const a=r.defArch;const key=r.def.slice().sort().join(", ");
+    (cm[a]??=(cm[a]={tot:0,compos:{}}));cm[a].tot++;cm[a].compos[key]=(cm[a].compos[key]||0)+1;}
+  const archOrder=Object.entries(cm).sort((x,y)=>y[1].tot-x[1].tot);
+  document.getElementById("archList").innerHTML = archOrder.length? archOrder.map(([a,v])=>{
+    const compos=Object.entries(v.compos).sort((x,y)=>y[1]-x[1]);
+    const items=compos.map(([c,n])=>`<div class="compo"><span>${c}</span><span class="cnt">${n}×</span></div>`).join("");
+    return `<details class="arch-item"><summary><span class="arch">${a}</span>`+
+      `<span class="meta">${v.tot} défenses · ${compos.length} compos</span></summary>${items}</details>`;
+  }).join("") : `<div class="empty">Aucune donnée avec ces filtres.</div>`;
 
   document.getElementById("foot").textContent =
     `${DATA.length} affrontements au total · saison 26 · Les Joyeux Psychopathes`;
