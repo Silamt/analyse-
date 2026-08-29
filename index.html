@@ -228,7 +228,7 @@ function render(){
   for(const r of rows){(dm[r.defArch]??=(dm[r.defArch]={faced:0,held:0}));dm[r.defArch].faced++;if(!r.cleared)dm[r.defArch].held++;}
   const dRows=Object.entries(dm).map(([a,v])=>({a,faced:v.faced,held:v.held,rate:v.held/v.faced*100})).filter(x=>x.faced>=10);
   makeSortable("defTable",[
-    {key:"a",label:"Archétype",fmt:r=>`<span class="arch">${r.a}</span>`},
+    {key:"a",label:"Archétype",fmt:r=>`<span class="arch clickarch" data-a="${r.a}" title="Voir les compos ${r.a}">${r.a}</span>`},
     {key:"faced",label:"Attaques subies",num:true,fmt:r=>`<span class="n-small">${r.faced}</span>`},
     {key:"held",label:"Attaques stoppées",num:true,fmt:r=>r.held},
     {key:"rate",label:"% stoppées",num:true,fmt:r=>`<span class="pct ${pctClass(r.rate)}">${Math.round(r.rate)}%</span>`},
@@ -332,5 +332,7 @@ document.getElementById("dl").addEventListener("click",download);
     try{localStorage.setItem("gvg-theme",nxt)}catch(e){}});
 })();
 
+document.getElementById("defTable").addEventListener("click",e=>{
+  const t=e.target.closest(".clickarch"); if(t)goToArch(t.dataset.a);});
 buildFilters(); render();
 </script>
