@@ -301,8 +301,9 @@ function render(){
     selArch.onchange=()=>{SEL_ARCH=selArch.value;draw();}; draw();
   }
 
+  const saisons=[...new Set(DATA.map(d=>d.season).filter(s=>s!=null))].sort((a,b)=>a-b);
   document.getElementById("foot").textContent=
-    `${DATA.length} affrontements au total · saison 26 · Les Joyeux Psychopathes`;
+    `${DATA.length} affrontements au total · saison${saisons.length>1?"s":""} ${saisons.join(", ")} · Les Joyeux Psychopathes`;
 }
 
 // ---- export CSV des données filtrées ----
